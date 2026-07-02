@@ -47,12 +47,19 @@ function DraggableGridInner<T>(
   );
 
   // Behavior config: every knob has a default, overridable per prop.
-  const drag = { inertia: 0.92, sensitivity: 1, axis: 'both' as const, enabled: true, ...props.drag };
+  const drag = {
+    inertia: 0.92,
+    sensitivity: 1,
+    axis: 'both' as const,
+    enabled: true,
+    ...props.drag,
+  };
   const idleDrift =
     props.idleDrift === false
       ? (false as const)
       : { enabled: true, speed: 0.02, delay: 3000, ...props.idleDrift };
-  const lens = props.lens === false ? (false as const) : { strength: 0.14, radius: 0.8, ...props.lens };
+  const lens =
+    props.lens === false ? (false as const) : { strength: 0.14, radius: 0.8, ...props.lens };
   const cursor = props.cursor ?? true;
 
   const containerRef = useRef<HTMLDivElement>(null);
