@@ -53,7 +53,7 @@ export function buildCells(
   geom: Geometry,
   itemCount: number,
   viewport: { w: number; h: number },
-  wrap: boolean
+  wrap: boolean,
 ): Cell[] {
   const n = Math.max(0, Math.floor(itemCount));
   if (n === 0) return [];

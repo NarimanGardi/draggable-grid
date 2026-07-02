@@ -21,7 +21,7 @@ export function stepInertia(
   inertia: number,
   restThreshold: number,
   ease?: EaseFn,
-  dt = 16
+  dt = 16,
 ): { v: Vec; atRest: boolean } {
   const decay = (val: number) => (ease ? ease(val, dt) : val * inertia);
   const next: Vec = { x: decay(v.x), y: decay(v.y) };

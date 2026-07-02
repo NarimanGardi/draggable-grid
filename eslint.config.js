@@ -12,6 +12,14 @@ export default [
     rules: {
       ...tseslint.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      // TS's own checker catches undefined identifiers; the core rule only
+      // produces false positives on browser globals and types here.
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   },
   { ignores: ['dist', 'example', 'node_modules'] },

@@ -12,7 +12,7 @@ export interface LensConfig {
 export type LensFn = (
   cellCenter: { x: number; y: number },
   viewport: { w: number; h: number },
-  cfg: LensConfig
+  cfg: LensConfig,
 ) => Transform;
 
 export const IDENTITY_TRANSFORM: Transform = { scale: 1, dx: 0, dy: 0 };
