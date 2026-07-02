@@ -1,42 +1,30 @@
 # draggable-grid
 
-An infinite, draggable, wrapping grid of your own React cells. Fling it around with
-inertia, it wraps so there's no edge, and a CSS perspective dome leans the edges toward
-you for depth. Everything is a prop with a sensible default; under reduced-motion it
-degrades to a plain static grid.
+A draggable, infinitely-wrapping WebGL wall of images. Fling it with inertia, it wraps
+so there's no edge, and it drifts on its own when you leave it alone. The posters are
+curved planes on a concave dome — the whole wall bows toward you like you're sitting
+inside it. Reduced-motion or no WebGL falls back to a plain static grid.
 
 ## Where this came from
 
-The original is the hero of a project called Cinematch: a wall of film posters on WebGL
-that you drag around, flinging with inertia and wrapping forever. The curve there is
-geometric, not a filter — flat poster planes sit in a perspective 3D scene, each nudged
-back along Z by its distance from center, so the wall bows into a shallow dome while
-every poster stays a crisp, undistorted rectangle. It falls back to a static CSS poster
-wall on mobile, reduced-motion, or where WebGL isn't available.
+This is the poster wall from a project called Cinematch, generalized into a component.
+The original renders film posters as textured planes in a three.js scene, dragged and
+wrapped, bowed into a dome by a perspective camera. This package is that engine with the
+Cinematch specifics removed: bring your own images, tune the curve and the drift, and it
+degrades to a static grid where WebGL isn't wanted or available.
 
-This package is that effect rebuilt for plain DOM — a reimagining, not a port of the
-code; the two share the behavior, not the implementation (three.js there, DOM here). The
-reason to leave WebGL behind: in the original every "poster" is an image painted onto a
-GPU plane, so the content can't be your real markup — no live links, no arbitrary
-components, no selectable text, and accessibility has to be mirrored in a separate DOM
-layer. Here the cells are your own React nodes, dragged and wrapped with CSS transforms, and the
-dome is real CSS 3D: a container `perspective` with each cell pushed along `translateZ` by
-its distance from center, so the edges lean toward you and the center sits deepest — same
-bowl as the original. What you give up is the rest of the 3D scene (a camera that dollies
-back as you drag, per-poster geometry); what you get is cells that are genuinely your
-content. That trade is the point.
-
-It leans on [`@use-gesture/react`](https://github.com/pmndrs/use-gesture) for pointer and
-touch handling. The "draggable wall" itself is a well-worn creative-web effect — this is
-a small, configurable, honest take on it.
+The posters here go a step further than the original — each one is a curved plane
+(bent on a cylinder), so it cups toward the viewer rather than staying flat. It builds
+on [three.js](https://threejs.org); the "draggable wall" is a well-worn creative-web
+effect, and this is a small, configurable take on it.
 
 ## Install
 
 ```sh
-npm i @narimangardi/draggable-grid
+npm i @narimangardi/draggable-grid three
 ```
 
-`react` and `react-dom` (>=18) are peer dependencies.
+`react`, `react-dom` (>=18) and `three` (>=0.160) are peer dependencies.
 
 ## Use
 
@@ -52,93 +40,71 @@ export function Wall() {
 }
 ```
 
-Your own cells and a few knobs:
+Items can be `{ src, alt }` objects, and most things are tunable:
 
 ```tsx
 <DraggableGrid
-  items={films}
-  renderItem={(film) => (
-    <a href={film.url}>
-      <img src={film.poster} alt={film.title} />
-    </a>
-  )}
+  items={films.map((f) => ({ src: f.poster, alt: f.title }))}
   columns={6}
-  lens={{ depth: 240, radius: 0.9, perspective: 1000 }}
-  idleDrift={{ enabled: true, speed: 0.02, delay: 2000 }}
-  onSelect={(film) => open(film)}
+  curve={{ dome: 0.018, bend: 0.6 }}
+  drift={{ enabled: true, speed: 0.004, angle: 160 }}
+  onSelect={(item, i) => open(films[i])}
   style={{ height: '80vh' }}
 />
 ```
 
-A bare string or a `{ src, alt }` object renders as an `<img>` that fills its cell.
-Anything else, supply your own `renderItem` returning any React node.
-
 ## Props
 
-Grouped knobs (`lens`, `drag`, `idleDrift`) take a partial object merged over the
-defaults; pass `false` (or `{ enabled: false }`) to switch a behavior off.
+Grouped knobs (`curve`, `drag`, `drift`) take a partial object merged over the defaults;
+pass `false` to switch a behavior off.
 
-| Prop                        | Type                                         | Default                                          | Notes                                                    |
-| --------------------------- | -------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------- |
-| `items`                     | `T[]`                                        | — (required)                                     | Your data.                                               |
-| `renderItem`                | `(item: T, i: number) => ReactNode`          | built-in image renderer                          | Owns a cell's content.                                   |
-| `columns`                   | `number`                                     | `7`                                              | Cells across; the grid fits its container width.         |
-| `gap`                       | `number`                                     | `16`                                             | Pixels between cells.                                    |
-| `cellAspect`                | `number`                                     | `2 / 3`                                          | Cell width ÷ height.                                     |
-| `wrap`                      | `boolean`                                    | `true`                                           | `false` for a finite grid with edges.                    |
-| `lens`                      | `{ depth; radius; perspective } \| false`    | `{ depth: 240, radius: 0.9, perspective: 1000 }` | Perspective dome; edges lean toward viewer. `false` off. |
-| `lensFn`                    | `(cell, viewport, cfg) => { z }`             | —                                                | Replace the built-in curve.                              |
-| `drag`                      | `{ inertia; sensitivity; axis; enabled }`    | `{ 0.92, 1, 'both', true }`                      | `axis` is `'x' \| 'y' \| 'both'`.                        |
-| `ease`                      | `(v: number, dt: number) => number`          | —                                                | Replace the inertia decay curve.                         |
-| `idleDrift`                 | `{ enabled; speed; delay } \| false`         | `{ true, 0.02, 3000 }`                           | Slow drift after `delay` ms idle.                        |
-| `fallback`                  | `'static' \| 'none' \| (items) => ReactNode` | `'static'`                                       | Reduced-motion path.                                     |
-| `background`                | `string`                                     | `'transparent'`                                  | Container background.                                    |
-| `cursor`                    | `boolean`                                    | `true`                                           | Show grab / grabbing cursors.                            |
-| `onSelect`                  | `(item: T, i: number) => void`               | —                                                | Click / Enter on a cell.                                 |
-| `onDragStart` / `onDragEnd` | `() => void`                                 | —                                                | Drag lifecycle.                                          |
-| `className` / `style`       | —                                            | —                                                | Passthrough; `style.height` sizes the viewport.          |
+| Prop                  | Type                                         | Default                      | Notes                                                               |
+| --------------------- | -------------------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
+| `items`               | `(string \| { src; alt? })[]`                | — (required)                 | Image sources. `alt` feeds the fallback + accessible label.         |
+| `columns`             | `number`                                     | `7`                          | Columns in the repeating tile.                                      |
+| `gap`                 | `number`                                     | `0.18`                       | Gap between posters, as a fraction of poster width.                 |
+| `cellAspect`          | `number`                                     | `2 / 3`                      | Poster width ÷ height.                                              |
+| `curve`               | `{ dome; bend } \| false`                    | `{ dome: 0.018, bend: 0.6 }` | `dome` = wall concavity, `bend` = per-poster curve. `false` = flat. |
+| `drag`                | `{ inertia; sensitivity; axis; enabled }`    | `{ 0.94, 1, 'both', true }`  | `axis` is `'x' \| 'y' \| 'both'`.                                   |
+| `drift`               | `{ enabled; speed; angle } \| false`         | `{ true, 0.004, 160 }`       | Continuous ambient motion; `angle` in degrees.                      |
+| `dpr`                 | `[number, number]`                           | `[1, 2]`                     | Device-pixel-ratio clamp.                                           |
+| `background`          | `string`                                     | `'transparent'`              | CSS color; `'transparent'` clears to alpha.                         |
+| `onSelect`            | `(item, i) => void`                          | —                            | Fires on a tap (not a drag), via raycast.                           |
+| `onReady`             | `() => void`                                 | —                            | Fires once the first texture has painted.                           |
+| `fallback`            | `'static' \| 'none' \| (items) => ReactNode` | `'static'`                   | Reduced-motion / no-WebGL path.                                     |
+| `className` / `style` | —                                            | —                            | Passthrough; `style.height` sizes the canvas.                       |
 
-### Imperative handle
-
-Pass a `ref` to drive it from outside:
+Pass a `ref` for imperative control:
 
 ```tsx
 const grid = useRef<DraggableGridHandle>(null);
 // grid.current.recenter()
-// grid.current.scrollToItem(12)
 // grid.current.getOffset() -> { x, y }
 ```
 
-### Escape hatches
-
-`lensFn` replaces the built-in curve with your own transform per cell; `ease` replaces
-the per-frame inertia decay. Both are ignored if you don't pass them, so they cost
-nothing for the common case.
-
 ## Accessibility
 
-When you pass `onSelect`, cells render as `<button>`s with an `aria-label` derived from
-the item (its `alt`/`title`, else `Item N`), so they're keyboard-reachable and activate
-on Enter. Without `onSelect`, cells are plain wrappers and carry whatever semantics your
-own content provides. Under `prefers-reduced-motion: reduce` the component renders a
-static, bounded, scrollable grid — no dragging, no animation loop.
+The interactive layer is a WebGL canvas, so it's `aria-hidden`. Real, accessible content
+lives in the **static fallback**: under `prefers-reduced-motion: reduce` (or where WebGL
+isn't available) the component renders a plain, bounded, scrollable grid of `<img>`s with
+your `alt` text. If accessibility of the content matters, treat the fallback as the
+accessible representation and give every item an `alt`.
 
 ## Limitations / Not handled
 
-- **The dome is a CSS perspective, not the full 3D scene.** Cells lean via `translateZ`
-  under one shared `perspective`, so you get the bow — but not the original's camera that
-  dollies back as you drag, and every cell stays a flat, axis-aligned plane. It reads as a
-  dome, not a rendered 3D space. Deliberate, to keep cells as real DOM (see above).
-- **Content repeats.** Wrapping is periodic — when `items` don't fill the tile, the same
-  items reappear as you drag past a span. There's no endless stream of unique content.
-- **No virtualization beyond the viewport.** Only cells covering the viewport (plus a
-  wrap margin) are positioned, but each covering tile renders all of `items`, so a very
-  large `items` array puts a lot of nodes in the DOM. It's built for walls of tens to a
-  few hundred, not tens of thousands.
-- **Motion is frame-based, not time-based.** Inertia and drift are tuned around ~60fps
-  and run proportionally faster on 120Hz or uncapped displays.
-- **No lightbox, routing, or data fetching.** It renders and moves cells; the rest is
-  yours.
+- **The interactive wall is WebGL textures, not DOM.** Posters are images on GPU planes —
+  you can't put a live link, selectable text, or an arbitrary React component on a poster.
+  Real DOM content only exists in the static fallback. If you need genuinely interactive
+  cells, this isn't the tool.
+- **Needs WebGL.** No usable context (old device, headless, blocked) → the static grid.
+  That's intended, but the curved wall is a WebGL-only experience.
+- **Content repeats.** Wrapping is periodic; textures are cycled across the wall, so the
+  same images reappear as you drag past a span. There's no endless unique content.
+- **Every image is loaded as a texture.** No streaming or atlasing — a few hundred posters
+  is fine; thousands will cost GPU memory and load time.
+- **Motion is frame-based, not time-based.** Inertia and drift are tuned around ~60fps and
+  run proportionally faster on high-refresh or uncapped displays.
+- **No lightbox, routing, or data fetching.** It renders and moves a wall; the rest is yours.
 
 ## License
 
