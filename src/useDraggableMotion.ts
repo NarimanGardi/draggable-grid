@@ -88,8 +88,11 @@ export function useDraggableMotion(params: MotionParams) {
       },
       onDrag: ({ delta }) => {
         const d = p.current.drag;
-        offset.current = applyDragDelta(offset.current, { x: delta[0], y: delta[1] }, d);
-        velocity.current = { x: delta[0], y: delta[1] };
+        const before = offset.current;
+        offset.current = applyDragDelta(before, { x: delta[0], y: delta[1] }, d);
+        // Carry the *applied* step as fling velocity so inertia inherits the same
+        // sensitivity and axis lock the drag used (raw delta would ignore both).
+        velocity.current = { x: offset.current.x - before.x, y: offset.current.y - before.y };
         lastInput.current = performance.now();
       },
       onDragEnd: () => {
