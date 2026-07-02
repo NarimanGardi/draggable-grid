@@ -57,7 +57,8 @@ function DraggableGridInner<T>(
   // `columns` cells span the container width: pitch = width / columns, so the
   // cell itself is the pitch minus one gap. Height follows the aspect ratio.
   const cellW = Math.max(1, viewportW / columns - gap);
-  const cellH = cellW / cellAspect;
+  // A non-positive aspect would make cellH Infinity/negative and poison the geometry.
+  const cellH = cellW / (cellAspect > 0 ? cellAspect : DEFAULT_ASPECT);
   const geom = useMemo(
     () => computeGeometry({ columns, cellW, cellH, gap, itemCount: items.length }),
     [columns, cellW, cellH, gap, items.length],

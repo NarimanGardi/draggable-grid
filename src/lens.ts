@@ -25,7 +25,8 @@ const smoothstep = (t: number) => t * t * (3 - 2 * t);
 // slightly outward; the effect fades to identity past `radius` (a fraction of
 // the half-diagonal). `cellCenter` is relative to the viewport center.
 export const lensTransform: LensFn = (cellCenter, viewport, cfg) => {
-  if (cfg.strength === 0) return IDENTITY_TRANSFORM;
+  // radius <= 0 would divide by zero (NaN at the exact center); treat it as "no lens".
+  if (cfg.strength === 0 || cfg.radius <= 0) return IDENTITY_TRANSFORM;
   const half = Math.hypot(viewport.w, viewport.h) / 2 || 1;
   const dist = Math.hypot(cellCenter.x, cellCenter.y) / half; // 0..~1
   const t = smoothstep(clamp01(1 - dist / cfg.radius)); // 1 at center → 0 past radius

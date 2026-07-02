@@ -9,6 +9,11 @@ describe('lensTransform', () => {
     expect(t).toEqual(IDENTITY_TRANSFORM);
   });
 
+  it('is identity (not NaN) when radius is 0, even at the exact center', () => {
+    const t = lensTransform({ x: 0, y: 0 }, vp, { strength: 0.2, radius: 0 });
+    expect(t).toEqual(IDENTITY_TRANSFORM);
+  });
+
   it('magnifies most at the center and applies no displacement there', () => {
     const t = lensTransform({ x: 0, y: 0 }, vp, { strength: 0.2, radius: 0.8 });
     expect(t.scale).toBeCloseTo(1.2);

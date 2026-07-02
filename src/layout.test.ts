@@ -25,6 +25,11 @@ describe('wrapOffset', () => {
     expect(wrapOffset(30, 100)).toBe(-70);
     expect(wrapOffset(230, 100)).toBe(-70);
   });
+
+  it('returns 0 for a non-positive span instead of dividing by zero', () => {
+    expect(wrapOffset(50, 0)).toBe(0);
+    expect(wrapOffset(50, -10)).toBe(0);
+  });
 });
 
 describe('buildCells (wrap)', () => {
@@ -52,6 +57,10 @@ describe('buildCells (wrap)', () => {
     const firstTile = cells.filter((c) => c.baseX < 200 && c.baseY < 200);
     const byPos = [...firstTile].sort((a, b) => a.baseY - b.baseY || a.baseX - b.baseX);
     expect(byPos.map((c) => c.itemIndex)).toEqual([0, 1, 2, 0]);
+  });
+
+  it('returns no cells when there are no items', () => {
+    expect(buildCells(geom, 0, { w: 300, h: 300 }, true)).toEqual([]);
   });
 
   it('renders a single tile when wrap is false', () => {
