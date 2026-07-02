@@ -57,6 +57,7 @@ export function useDraggableMotion(params: MotionParams) {
   const lastInput = useRef(0);
   const visible = useRef(true);
   const raf = useRef(0);
+  const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const running = useRef(false);
   const p = useRef(params);
   p.current = params;
@@ -68,12 +69,20 @@ export function useDraggableMotion(params: MotionParams) {
     }
   }
 
+  function clearIdleTimer() {
+    if (idleTimer.current !== null) {
+      clearTimeout(idleTimer.current);
+      idleTimer.current = null;
+    }
+  }
+
   const bind = useGesture(
     {
       onDragStart: () => {
         dragging.current = true;
         lastInput.current = performance.now();
         drift.current = { x: 0, y: 0 };
+        clearIdleTimer();
         p.current.onDragStart?.();
         ensureRunning();
       },
@@ -97,6 +106,13 @@ export function useDraggableMotion(params: MotionParams) {
     const cur = p.current;
     const now = performance.now();
 
+    // Drift is *active* only once we're past the idle delay — before that it
+    // contributes no offset and the loop is free to rest.
+    const driftActive =
+      cur.idleDrift !== false &&
+      cur.idleDrift.enabled &&
+      now - lastInput.current > cur.idleDrift.delay;
+
     if (!dragging.current) {
       // momentum
       const r = stepInertia(velocity.current, cur.drag.inertia, REST_THRESHOLD, cur.ease);
@@ -105,9 +121,7 @@ export function useDraggableMotion(params: MotionParams) {
 
       // idle drift after the delay, once momentum has settled
       if (cur.idleDrift && cur.idleDrift.enabled && r.atRest) {
-        const idleFor = now - lastInput.current;
-        const target =
-          idleFor > cur.idleDrift.delay ? { x: cur.idleDrift.speed, y: 0 } : { x: 0, y: 0 };
+        const target = driftActive ? { x: cur.idleDrift.speed, y: 0 } : { x: 0, y: 0 };
         drift.current = stepDrift(drift.current, target, DRIFT_EASE);
         offset.current = {
           x: offset.current.x + drift.current.x,
@@ -118,15 +132,21 @@ export function useDraggableMotion(params: MotionParams) {
 
     paint();
 
-    const cur2 = p.current;
     const stillMoving =
       dragging.current ||
       Math.hypot(velocity.current.x, velocity.current.y) >= REST_THRESHOLD ||
-      (cur2.idleDrift !== false && cur2.idleDrift.enabled);
+      driftActive;
     if (stillMoving && visible.current) {
       raf.current = requestAnimationFrame(frame);
     } else {
       running.current = false;
+      // Nothing is moving now. If drift is enabled but its delay hasn't
+      // elapsed yet, wake the loop when it does so drifting can begin.
+      const idle = cur.idleDrift;
+      if (idle !== false && idle.enabled && !dragging.current && visible.current && !driftActive) {
+        const wait = Math.max(0, idle.delay - (now - lastInput.current)) + 16;
+        idleTimer.current = setTimeout(ensureRunning, wait);
+      }
     }
   }
 
@@ -160,6 +180,7 @@ export function useDraggableMotion(params: MotionParams) {
     const io = new IntersectionObserver((entries) => {
       visible.current = entries[0]?.isIntersecting ?? true;
       if (visible.current) ensureRunning();
+      else clearIdleTimer();
     });
     io.observe(node);
     return () => io.disconnect();
@@ -172,6 +193,7 @@ export function useDraggableMotion(params: MotionParams) {
     ensureRunning();
     return () => {
       cancelAnimationFrame(raf.current);
+      clearIdleTimer();
       running.current = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
