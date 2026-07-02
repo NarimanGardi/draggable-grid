@@ -79,7 +79,7 @@ function DraggableGridInner<T>(
   const lens =
     props.lens === false
       ? (false as const)
-      : { depth: 160, radius: 0.9, perspective: 1000, ...props.lens };
+      : { depth: 240, radius: 0.9, perspective: 1000, ...props.lens };
   const cursor = props.cursor ?? true;
 
   const cells = buildCells(geom, items.length, viewport, wrap);

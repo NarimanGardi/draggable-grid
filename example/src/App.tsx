@@ -24,7 +24,7 @@ export function App() {
         ref={ref}
         items={posters}
         columns={6}
-        lens={lensOn ? { depth: 160, radius: 0.9, perspective: 1000 } : false}
+        lens={lensOn ? { depth: 240, radius: 0.9, perspective: 1000 } : false}
         idleDrift={drift ? { enabled: true, speed: 0.02, delay: 2000 } : false}
         onSelect={(item, i) => console.log('select', i, item)}
         style={{ height: '80vh' }}

@@ -63,7 +63,7 @@ Your own cells and a few knobs:
     </a>
   )}
   columns={6}
-  lens={{ depth: 160, radius: 0.9, perspective: 1000 }}
+  lens={{ depth: 240, radius: 0.9, perspective: 1000 }}
   idleDrift={{ enabled: true, speed: 0.02, delay: 2000 }}
   onSelect={(film) => open(film)}
   style={{ height: '80vh' }}
@@ -86,7 +86,7 @@ defaults; pass `false` (or `{ enabled: false }`) to switch a behavior off.
 | `gap`                       | `number`                                     | `16`                                             | Pixels between cells.                                    |
 | `cellAspect`                | `number`                                     | `2 / 3`                                          | Cell width ÷ height.                                     |
 | `wrap`                      | `boolean`                                    | `true`                                           | `false` for a finite grid with edges.                    |
-| `lens`                      | `{ depth; radius; perspective } \| false`    | `{ depth: 160, radius: 0.9, perspective: 1000 }` | Perspective dome; edges lean toward viewer. `false` off. |
+| `lens`                      | `{ depth; radius; perspective } \| false`    | `{ depth: 240, radius: 0.9, perspective: 1000 }` | Perspective dome; edges lean toward viewer. `false` off. |
 | `lensFn`                    | `(cell, viewport, cfg) => { z }`             | —                                                | Replace the built-in curve.                              |
 | `drag`                      | `{ inertia; sensitivity; axis; enabled }`    | `{ 0.92, 1, 'both', true }`                      | `axis` is `'x' \| 'y' \| 'both'`.                        |
 | `ease`                      | `(v: number, dt: number) => number`          | —                                                | Replace the inertia decay curve.                         |
