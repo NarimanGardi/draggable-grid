@@ -6,5 +6,5 @@ export default defineConfig({
   dts: true,
   clean: true,
   treeshake: true,
-  external: ['react', 'react-dom'],
+  external: ['react', 'react-dom', 'three'],
 });

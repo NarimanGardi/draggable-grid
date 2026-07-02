@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { axisMask, stepInertia, stepDrift } from './motion';
+import { axisMask, stepInertia } from './motion';
 
 describe('axisMask', () => {
   it('locks to x', () => {
@@ -32,17 +32,5 @@ describe('stepInertia', () => {
     const halve: (val: number) => number = (val) => val * 0.5;
     const { v } = stepInertia({ x: 8, y: 0 }, 0.9, 0.01, (val) => halve(val), 16);
     expect(v.x).toBeCloseTo(4);
-  });
-});
-
-describe('stepDrift', () => {
-  it('eases current toward target', () => {
-    const next = stepDrift({ x: 0, y: 0 }, { x: 1, y: 0 }, 0.5);
-    expect(next.x).toBeCloseTo(0.5);
-  });
-  it('reaches the target over repeated steps', () => {
-    let cur = { x: 0, y: 0 };
-    for (let i = 0; i < 50; i++) cur = stepDrift(cur, { x: 2, y: 0 }, 0.3);
-    expect(cur.x).toBeCloseTo(2, 3);
   });
 });

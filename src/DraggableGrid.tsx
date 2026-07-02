@@ -1,109 +1,141 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, type ReactNode } from 'react';
-import { computeGeometry, buildCells } from './layout';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { defaultRenderItem } from './defaultRenderItem';
-import { itemLabel } from './itemLabel';
 import { prefersReducedMotion, shouldFallback } from './prefersReducedMotion';
 import { useHasMounted } from './useHasMounted';
-import { useMeasuredSize } from './useMeasuredSize';
-import { useDraggableMotion } from './useDraggableMotion';
 import { StaticGrid } from './StaticGrid';
-import type { DraggableGridProps, DraggableGridHandle } from './types';
+import type { EngineControls, EngineOptions } from './engine';
+import type { DraggableGridProps, DraggableGridHandle, ImageItem } from './types';
 
-const DEFAULT_COLUMNS = 7;
-const DEFAULT_GAP = 16;
-const DEFAULT_ASPECT = 2 / 3;
+const DEFAULTS = {
+  columns: 7,
+  gap: 0.18,
+  cellAspect: 2 / 3,
+  dome: 0.018,
+  bend: 0.6,
+  drag: { inertia: 0.94, sensitivity: 1, axis: 'both' as const, enabled: true },
+  drift: { enabled: true, speed: 0.004, angle: 160 },
+  dpr: [1, 2] as [number, number],
+  background: 'transparent',
+};
 
-function pxOrDefault(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-}
+const srcOf = (item: ImageItem): string => (typeof item === 'string' ? item : item.src);
 
-function DraggableGridInner<T>(
-  props: DraggableGridProps<T>,
-  _ref: React.ForwardedRef<DraggableGridHandle>,
+function DraggableGridInner(
+  props: DraggableGridProps,
+  ref: React.ForwardedRef<DraggableGridHandle>,
 ) {
   const {
     items,
-    renderItem,
-    columns = DEFAULT_COLUMNS,
-    gap = DEFAULT_GAP,
-    cellAspect = DEFAULT_ASPECT,
-    wrap = true,
+    columns = DEFAULTS.columns,
+    gap = DEFAULTS.gap,
+    cellAspect = DEFAULTS.cellAspect,
     fallback = 'static',
-    background = 'transparent',
+    background = DEFAULTS.background,
     onSelect,
     className,
     style,
   } = props;
 
+  const curve =
+    props.curve === false
+      ? { dome: 0, bend: 0 }
+      : { dome: DEFAULTS.dome, bend: DEFAULTS.bend, ...props.curve };
+  const drag = { ...DEFAULTS.drag, ...props.drag };
+  const drift =
+    props.drift === false
+      ? { enabled: false, speed: 0, angle: 0 }
+      : { ...DEFAULTS.drift, ...props.drift };
+  const dpr = props.dpr ?? DEFAULTS.dpr;
+
   const mounted = useHasMounted();
-  const renderCellContent = (index: number): ReactNode =>
-    (renderItem ?? (defaultRenderItem as (i: T, idx: number) => ReactNode))(
-      items[index] as T,
-      index,
-    );
+  const reduced = mounted ? prefersReducedMotion() : true; // SSR / first paint → static
+  const [webglFailed, setWebglFailed] = useState(false);
+  const [ready, setReady] = useState(false);
+  const useStatic = shouldFallback(fallback, reduced) || webglFailed;
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const layerRef = useRef<HTMLDivElement>(null);
-  const cellRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const controlsRef = useRef<EngineControls | null>(null);
+  const visibleRef = useRef(true);
 
-  // Measure the container so the grid fits its real size (width → cell size and
-  // column pitch; height → wrap coverage and lens center). Until the first
-  // measurement lands, fall back to sane estimates so the first frame isn't empty.
-  const measured = useMeasuredSize(containerRef);
-  const viewportW = measured.w || 1200;
-  const viewportH = measured.h || pxOrDefault(style?.height, 600);
-  const viewport = { w: viewportW, h: viewportH };
+  // Latest props the engine reads at mount / on select, without re-mounting per render.
+  const live = useRef({ items, onSelect, onReady: props.onReady });
+  live.current = { items, onSelect, onReady: props.onReady };
 
-  // `columns` cells span the container width: pitch = width / columns, so the
-  // cell itself is the pitch minus one gap. Height follows the aspect ratio.
-  const cellW = Math.max(1, viewportW / columns - gap);
-  // A non-positive aspect would make cellH Infinity/negative and poison the geometry.
-  const cellH = cellW / (cellAspect > 0 ? cellAspect : DEFAULT_ASPECT);
-  const geom = useMemo(
-    () => computeGeometry({ columns, cellW, cellH, gap, itemCount: items.length }),
-    [columns, cellW, cellH, gap, items.length],
-  );
-
-  // Behavior config: every knob has a default, overridable per prop.
-  const drag = {
-    inertia: 0.92,
-    sensitivity: 1,
-    axis: 'both' as const,
-    enabled: true,
-    ...props.drag,
-  };
-  const idleDrift =
-    props.idleDrift === false
-      ? (false as const)
-      : { enabled: true, speed: 0.02, delay: 3000, ...props.idleDrift };
-  const lens =
-    props.lens === false
-      ? (false as const)
-      : { depth: 240, radius: 0.9, perspective: 1000, ...props.lens };
-  const cursor = props.cursor ?? true;
-
-  const cells = buildCells(geom, items.length, viewport, wrap);
-
-  const { bind, handle } = useDraggableMotion({
-    geom,
-    cells,
-    wrap,
-    viewport,
+  // A config signature: when any of these change, tear the scene down and rebuild.
+  const optsKey = JSON.stringify({
+    columns,
+    gap,
+    cellAspect,
+    curve,
     drag,
-    ease: props.ease,
-    idleDrift,
-    lens,
-    lensFn: props.lensFn,
-    containerRef,
-    layerRef,
-    cellRefs,
-    onDragStart: props.onDragStart,
-    onDragEnd: props.onDragEnd,
+    drift,
+    dpr,
+    background,
+    n: items.length,
   });
-  useImperativeHandle(_ref, () => handle, [handle]);
 
-  const reduced = mounted ? prefersReducedMotion() : true; // SSR/first render → static
-  const useStatic = shouldFallback(fallback, reduced);
+  useEffect(() => {
+    if (useStatic) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let controls: EngineControls | undefined;
+    let cancelled = false;
+    setReady(false);
+    import('./engine').then(({ mountWall }) => {
+      if (cancelled) return;
+      const el = canvasRef.current;
+      if (!el) return;
+      const opts: EngineOptions = {
+        posters: live.current.items.map(srcOf),
+        columns,
+        cellAspect,
+        gap,
+        dome: curve.dome,
+        bend: curve.bend,
+        drag,
+        drift,
+        dpr,
+        background,
+        onReady: () => {
+          setReady(true);
+          live.current.onReady?.();
+        },
+        onSelect: (index) => live.current.onSelect?.(live.current.items[index]!, index),
+        visibleRef,
+      };
+      controls = mountWall(el, opts);
+      if (!controls)
+        setWebglFailed(true); // no usable WebGL context → static fallback
+      else controlsRef.current = controls;
+    });
+    return () => {
+      cancelled = true;
+      controls?.dispose();
+      controlsRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useStatic, optsKey]);
+
+  // Pause rendering when off-screen.
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof IntersectionObserver === 'undefined') return;
+    const io = new IntersectionObserver((entries) => {
+      visibleRef.current = entries[0]?.isIntersecting ?? true;
+    });
+    io.observe(node);
+    return () => io.disconnect();
+  }, []);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      recenter: () => controlsRef.current?.recenter(),
+      getOffset: () => controlsRef.current?.getOffset() ?? { x: 0, y: 0 },
+    }),
+    [],
+  );
 
   if (useStatic) {
     if (typeof fallback === 'function') return <>{fallback(items)}</>;
@@ -111,34 +143,14 @@ function DraggableGridInner<T>(
       <StaticGrid
         count={items.length}
         columns={columns}
-        gap={gap}
+        gap={8}
         cellAspect={cellAspect}
-        renderCell={renderCellContent}
+        renderCell={(i) => defaultRenderItem(items[i])}
         className={className}
         style={style}
       />
     );
   }
-
-  // Interactive DOM. The rAF loop in useDraggableMotion mutates transforms on
-  // the layer (drag/wrap) and each cell (lens); cells register via cellRefs.
-  const setCellRef = (key: string) => (el: HTMLElement | null) => {
-    if (el) cellRefs.current.set(key, el);
-    else cellRefs.current.delete(key);
-  };
-  const cellStyle = (cell: (typeof cells)[number]) =>
-    ({
-      position: 'absolute',
-      left: cell.baseX,
-      top: cell.baseY,
-      width: geom.cellW,
-      height: geom.cellH,
-      padding: 0,
-      border: 'none',
-      background: 'none',
-      cursor: 'inherit',
-      willChange: 'transform',
-    }) as const;
 
   return (
     <div
@@ -146,52 +158,25 @@ function DraggableGridInner<T>(
       data-testid="draggable-grid"
       data-mode="interactive"
       className={className}
-      {...bind()}
-      style={{
-        position: 'relative',
-        overflow: 'hidden',
-        touchAction: 'none',
-        background,
-        height: 600,
-        cursor: cursor ? 'grab' : 'default',
-        // The dome lives here: cells' translateZ is projected through this perspective.
-        perspective: lens ? `${lens.perspective}px` : undefined,
-        ...style,
-      }}
+      role="group"
+      aria-label="Draggable wall of images — drag to explore"
+      style={{ position: 'relative', overflow: 'hidden', background, height: 600, ...style }}
     >
-      <div
-        ref={layerRef}
+      <canvas
+        ref={canvasRef}
+        aria-hidden="true"
         style={{
-          position: 'absolute',
-          inset: 0,
-          willChange: 'transform',
-          // Let cell translateZ render in the container's 3D space, not flattened.
-          transformStyle: 'preserve-3d',
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          touchAction: 'none',
+          cursor: 'grab',
+          opacity: ready ? 1 : 0,
+          transition: 'opacity 300ms ease',
         }}
-      >
-        {cells.map((cell) =>
-          onSelect ? (
-            <button
-              key={cell.key}
-              type="button"
-              aria-label={itemLabel(items[cell.itemIndex], cell.itemIndex)}
-              ref={setCellRef(cell.key)}
-              onClick={() => onSelect(items[cell.itemIndex] as T, cell.itemIndex)}
-              style={cellStyle(cell)}
-            >
-              {renderCellContent(cell.itemIndex)}
-            </button>
-          ) : (
-            <div key={cell.key} ref={setCellRef(cell.key)} style={cellStyle(cell)}>
-              {renderCellContent(cell.itemIndex)}
-            </div>
-          ),
-        )}
-      </div>
+      />
     </div>
   );
 }
 
-export const DraggableGrid = forwardRef(DraggableGridInner) as <T>(
-  props: DraggableGridProps<T> & { ref?: React.ForwardedRef<DraggableGridHandle> },
-) => ReturnType<typeof DraggableGridInner>;
+export const DraggableGrid = forwardRef(DraggableGridInner);

@@ -1,4 +1,4 @@
-import type { Axis } from './layout';
+export type Axis = 'x' | 'y' | 'both';
 
 export interface Vec {
   x: number;
@@ -14,8 +14,8 @@ export function axisMask(delta: Vec, axis: Axis): Vec {
 
 export type EaseFn = (v: number, dt: number) => number;
 
-// One frame of momentum. Returns the decayed velocity and whether it has
-// settled below the rest threshold (so the rAF loop can pause).
+// One frame of momentum. Returns the decayed velocity and whether it has settled below
+// the rest threshold. The engine carries the fling this way after a drag is released.
 export function stepInertia(
   v: Vec,
   inertia: number,
@@ -27,13 +27,4 @@ export function stepInertia(
   const next: Vec = { x: decay(v.x), y: decay(v.y) };
   const atRest = Math.hypot(next.x, next.y) < restThreshold;
   return { v: atRest ? { x: 0, y: 0 } : next, atRest };
-}
-
-// Ease a value toward a target (linear interpolation). Used to ramp idle drift
-// up from rest and back down when interaction resumes.
-export function stepDrift(current: Vec, target: Vec, easeFactor: number): Vec {
-  return {
-    x: current.x + (target.x - current.x) * easeFactor,
-    y: current.y + (target.y - current.y) * easeFactor,
-  };
 }

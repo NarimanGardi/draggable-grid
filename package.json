@@ -1,7 +1,7 @@
 {
   "name": "@narimangardi/draggable-grid",
   "version": "0.0.0",
-  "description": "Infinite draggable, wrapping grid of your own React cells — inertia, idle drift, a CSS lens curve, and a static-grid fallback.",
+  "description": "Draggable, infinitely-wrapping WebGL wall of curved poster planes on a concave dome — inertia, ambient drift, and a static-grid fallback.",
   "type": "module",
   "license": "MIT",
   "author": "Nariman Gardi",
@@ -12,10 +12,12 @@
   "homepage": "https://github.com/NarimanGardi/draggable-grid#readme",
   "keywords": [
     "react",
-    "grid",
+    "webgl",
+    "three",
     "draggable",
     "infinite-scroll",
     "gallery",
+    "poster-wall",
     "inertia"
   ],
   "sideEffects": false,
@@ -42,13 +44,13 @@
   },
   "peerDependencies": {
     "react": ">=18",
-    "react-dom": ">=18"
-  },
-  "dependencies": {
-    "@use-gesture/react": "^10.3.1"
+    "react-dom": ">=18",
+    "three": ">=0.160"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
+    "@types/three": "^0.171.0",
+    "three": "^0.171.0",
     "@testing-library/react": "^16.1.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/user-event": "^14.5.2",
