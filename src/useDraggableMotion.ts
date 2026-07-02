@@ -162,17 +162,21 @@ export function useDraggableMotion(params: MotionParams) {
     layer.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
 
     const lensCfg = cur.lens;
-    if (lensCfg === false) return;
     const cx0 = cur.viewport.w / 2;
     const cy0 = cur.viewport.h / 2;
     const apply = cur.lensFn ?? lensTransform;
     for (const cell of cur.cells) {
       const el = cur.cellRefs.current.get(cell.key);
       if (!el) continue;
+      if (lensCfg === false) {
+        // No dome: cells ride the layer flat. Clear any stale translateZ.
+        if (el.style.transform) el.style.transform = '';
+        continue;
+      }
       const screenCx = tx + cell.baseX + cur.geom.cellW / 2;
       const screenCy = ty + cell.baseY + cur.geom.cellH / 2;
       const t = apply({ x: screenCx - cx0, y: screenCy - cy0 }, cur.viewport, lensCfg);
-      el.style.transform = `translate3d(${t.dx}px, ${t.dy}px, 0) scale(${t.scale})`;
+      el.style.transform = `translateZ(${t.z}px)`;
     }
   }
 
@@ -201,6 +205,13 @@ export function useDraggableMotion(params: MotionParams) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Repaint once after any React re-render (measured resize, lens toggle, prop
+  // change) so cells reflect the new geometry/dome even while the loop is at rest.
+  // Drag/inertia don't re-render (they mutate refs), so this doesn't fire per frame.
+  useEffect(() => {
+    paint();
+  });
 
   const handle = useMemo(
     () => ({

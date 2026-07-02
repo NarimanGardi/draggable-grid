@@ -77,7 +77,9 @@ function DraggableGridInner<T>(
       ? (false as const)
       : { enabled: true, speed: 0.02, delay: 3000, ...props.idleDrift };
   const lens =
-    props.lens === false ? (false as const) : { strength: 0.14, radius: 0.8, ...props.lens };
+    props.lens === false
+      ? (false as const)
+      : { depth: 160, radius: 0.9, perspective: 1000, ...props.lens };
   const cursor = props.cursor ?? true;
 
   const cells = buildCells(geom, items.length, viewport, wrap);
@@ -152,10 +154,21 @@ function DraggableGridInner<T>(
         background,
         height: 600,
         cursor: cursor ? 'grab' : 'default',
+        // The dome lives here: cells' translateZ is projected through this perspective.
+        perspective: lens ? `${lens.perspective}px` : undefined,
         ...style,
       }}
     >
-      <div ref={layerRef} style={{ position: 'absolute', inset: 0, willChange: 'transform' }}>
+      <div
+        ref={layerRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          willChange: 'transform',
+          // Let cell translateZ render in the container's 3D space, not flattened.
+          transformStyle: 'preserve-3d',
+        }}
+      >
         {cells.map((cell) =>
           onSelect ? (
             <button

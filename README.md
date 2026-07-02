@@ -1,9 +1,9 @@
 # draggable-grid
 
 An infinite, draggable, wrapping grid of your own React cells. Fling it around with
-inertia, it wraps so there's no edge, and it bows toward the center for a bit of depth.
-Everything is a prop with a sensible default; under reduced-motion it degrades to a
-plain static grid.
+inertia, it wraps so there's no edge, and a CSS perspective dome leans the edges toward
+you for depth. Everything is a prop with a sensible default; under reduced-motion it
+degrades to a plain static grid.
 
 ## Where this came from
 
@@ -19,10 +19,12 @@ code; the two share the behavior, not the implementation (three.js there, DOM he
 reason to leave WebGL behind: in the original every "poster" is an image painted onto a
 GPU plane, so the content can't be your real markup — no live links, no arbitrary
 components, no selectable text, and accessibility has to be mirrored in a separate DOM
-layer. Here the cells are your own React nodes, dragged and wrapped with CSS transforms,
-and the concave feel is a CSS approximation (a scale/curve toward the center) rather than
-a true perspective camera. You trade the real 3D dome for content that's genuinely yours.
-That trade is the point.
+layer. Here the cells are your own React nodes, dragged and wrapped with CSS transforms, and the
+dome is real CSS 3D: a container `perspective` with each cell pushed along `translateZ` by
+its distance from center, so the edges lean toward you and the center sits deepest — same
+bowl as the original. What you give up is the rest of the 3D scene (a camera that dollies
+back as you drag, per-poster geometry); what you get is cells that are genuinely your
+content. That trade is the point.
 
 It leans on [`@use-gesture/react`](https://github.com/pmndrs/use-gesture) for pointer and
 touch handling. The "draggable wall" itself is a well-worn creative-web effect — this is
@@ -61,7 +63,7 @@ Your own cells and a few knobs:
     </a>
   )}
   columns={6}
-  lens={{ strength: 0.14, radius: 0.8 }}
+  lens={{ depth: 160, radius: 0.9, perspective: 1000 }}
   idleDrift={{ enabled: true, speed: 0.02, delay: 2000 }}
   onSelect={(film) => open(film)}
   style={{ height: '80vh' }}
@@ -76,25 +78,25 @@ Anything else, supply your own `renderItem` returning any React node.
 Grouped knobs (`lens`, `drag`, `idleDrift`) take a partial object merged over the
 defaults; pass `false` (or `{ enabled: false }`) to switch a behavior off.
 
-| Prop                        | Type                                         | Default                           | Notes                                            |
-| --------------------------- | -------------------------------------------- | --------------------------------- | ------------------------------------------------ |
-| `items`                     | `T[]`                                        | — (required)                      | Your data.                                       |
-| `renderItem`                | `(item: T, i: number) => ReactNode`          | built-in image renderer           | Owns a cell's content.                           |
-| `columns`                   | `number`                                     | `7`                               | Cells across; the grid fits its container width. |
-| `gap`                       | `number`                                     | `16`                              | Pixels between cells.                            |
-| `cellAspect`                | `number`                                     | `2 / 3`                           | Cell width ÷ height.                             |
-| `wrap`                      | `boolean`                                    | `true`                            | `false` for a finite grid with edges.            |
-| `lens`                      | `{ strength; radius } \| false`              | `{ strength: 0.14, radius: 0.8 }` | Concave curve toward center. `false` to flatten. |
-| `lensFn`                    | `(cell, viewport, cfg) => { scale; dx; dy }` | —                                 | Replace the built-in curve.                      |
-| `drag`                      | `{ inertia; sensitivity; axis; enabled }`    | `{ 0.92, 1, 'both', true }`       | `axis` is `'x' \| 'y' \| 'both'`.                |
-| `ease`                      | `(v: number, dt: number) => number`          | —                                 | Replace the inertia decay curve.                 |
-| `idleDrift`                 | `{ enabled; speed; delay } \| false`         | `{ true, 0.02, 3000 }`            | Slow drift after `delay` ms idle.                |
-| `fallback`                  | `'static' \| 'none' \| (items) => ReactNode` | `'static'`                        | Reduced-motion path.                             |
-| `background`                | `string`                                     | `'transparent'`                   | Container background.                            |
-| `cursor`                    | `boolean`                                    | `true`                            | Show grab / grabbing cursors.                    |
-| `onSelect`                  | `(item: T, i: number) => void`               | —                                 | Click / Enter on a cell.                         |
-| `onDragStart` / `onDragEnd` | `() => void`                                 | —                                 | Drag lifecycle.                                  |
-| `className` / `style`       | —                                            | —                                 | Passthrough; `style.height` sizes the viewport.  |
+| Prop                        | Type                                         | Default                                          | Notes                                                    |
+| --------------------------- | -------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------- |
+| `items`                     | `T[]`                                        | — (required)                                     | Your data.                                               |
+| `renderItem`                | `(item: T, i: number) => ReactNode`          | built-in image renderer                          | Owns a cell's content.                                   |
+| `columns`                   | `number`                                     | `7`                                              | Cells across; the grid fits its container width.         |
+| `gap`                       | `number`                                     | `16`                                             | Pixels between cells.                                    |
+| `cellAspect`                | `number`                                     | `2 / 3`                                          | Cell width ÷ height.                                     |
+| `wrap`                      | `boolean`                                    | `true`                                           | `false` for a finite grid with edges.                    |
+| `lens`                      | `{ depth; radius; perspective } \| false`    | `{ depth: 160, radius: 0.9, perspective: 1000 }` | Perspective dome; edges lean toward viewer. `false` off. |
+| `lensFn`                    | `(cell, viewport, cfg) => { z }`             | —                                                | Replace the built-in curve.                              |
+| `drag`                      | `{ inertia; sensitivity; axis; enabled }`    | `{ 0.92, 1, 'both', true }`                      | `axis` is `'x' \| 'y' \| 'both'`.                        |
+| `ease`                      | `(v: number, dt: number) => number`          | —                                                | Replace the inertia decay curve.                         |
+| `idleDrift`                 | `{ enabled; speed; delay } \| false`         | `{ true, 0.02, 3000 }`                           | Slow drift after `delay` ms idle.                        |
+| `fallback`                  | `'static' \| 'none' \| (items) => ReactNode` | `'static'`                                       | Reduced-motion path.                                     |
+| `background`                | `string`                                     | `'transparent'`                                  | Container background.                                    |
+| `cursor`                    | `boolean`                                    | `true`                                           | Show grab / grabbing cursors.                            |
+| `onSelect`                  | `(item: T, i: number) => void`               | —                                                | Click / Enter on a cell.                                 |
+| `onDragStart` / `onDragEnd` | `() => void`                                 | —                                                | Drag lifecycle.                                          |
+| `className` / `style`       | —                                            | —                                                | Passthrough; `style.height` sizes the viewport.          |
 
 ### Imperative handle
 
@@ -123,10 +125,10 @@ static, bounded, scrollable grid — no dragging, no animation loop.
 
 ## Limitations / Not handled
 
-- **The lens is a CSS transform, not real 3D.** It scales and nudges cells by distance
-  from center to fake the bow; it won't give you the true perspective dome the WebGL
-  original did (flat planes recessed in Z). That's the deliberate trade for keeping cells
-  as real DOM (see above).
+- **The dome is a CSS perspective, not the full 3D scene.** Cells lean via `translateZ`
+  under one shared `perspective`, so you get the bow — but not the original's camera that
+  dollies back as you drag, and every cell stays a flat, axis-aligned plane. It reads as a
+  dome, not a rendered 3D space. Deliberate, to keep cells as real DOM (see above).
 - **Content repeats.** Wrapping is periodic — when `items` don't fill the tile, the same
   items reappear as you drag past a span. There's no endless stream of unique content.
 - **No virtualization beyond the viewport.** Only cells covering the viewport (plus a
