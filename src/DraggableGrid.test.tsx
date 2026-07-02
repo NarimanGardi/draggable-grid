@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DraggableGrid } from './DraggableGrid';
 
 const items = ['/a.jpg', '/b.jpg', '/c.jpg'];
@@ -32,23 +31,35 @@ describe('DraggableGrid', () => {
     expect(region).toHaveAttribute('data-mode', 'static');
   });
 
-  it('fires onSelect when a cell is activated', async () => {
+  it('fires onSelect when a cell is activated', () => {
     const onSelect = vi.fn();
     render(<DraggableGrid items={items} onSelect={onSelect} style={{ height: 400 }} />);
     const cells = screen.getAllByRole('button');
-    await userEvent.click(cells[0]!);
+    // A genuine click (which use-gesture's filterTaps lets through as a tap).
+    // fireEvent.click matches the click a real tap produces; userEvent's full
+    // pointer sequence isn't fully driven by use-gesture's state machine under
+    // jsdom, so tap-vs-drag is exercised in the browser in Task 9.
+    fireEvent.click(cells[0]!);
     expect(onSelect).toHaveBeenCalledWith('/a.jpg', 0);
+  });
+
+  it('gives selectable cells an accessible name', () => {
+    render(<DraggableGrid items={items} onSelect={() => {}} style={{ height: 400 }} />);
+    const cells = screen.getAllByRole('button');
+    expect(cells.length).toBeGreaterThanOrEqual(items.length);
+    for (const cell of cells) {
+      expect(cell).toHaveAccessibleName(/\S/);
+    }
+  });
+
+  it('renders no buttons when onSelect is absent', () => {
+    render(<DraggableGrid items={items} style={{ height: 400 }} />);
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
   it('renders a custom fallback function under reduced motion', () => {
     stubReducedMotion(true);
-    render(
-      <DraggableGrid
-        items={items}
-        fallback={() => <p>reduced</p>}
-        style={{ height: 400 }}
-      />
-    );
+    render(<DraggableGrid items={items} fallback={() => <p>reduced</p>} style={{ height: 400 }} />);
     expect(screen.getByText('reduced')).toBeInTheDocument();
   });
 });
