@@ -57,6 +57,15 @@ describe('DraggableGrid', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
 
+  it('still renders cells when height is a CSS string, not a number', () => {
+    // Regression: a string height ('80vh') was cast to a number and fed into
+    // the coverage math, making dupY NaN and rendering zero cells (empty grid).
+    // The container is measured now; a string height falls back to a usable
+    // default until measurement lands.
+    render(<DraggableGrid items={items} style={{ height: '80vh' }} />);
+    expect(screen.getAllByRole('presentation').length).toBeGreaterThanOrEqual(items.length);
+  });
+
   it('renders a custom fallback function under reduced motion', () => {
     stubReducedMotion(true);
     render(<DraggableGrid items={items} fallback={() => <p>reduced</p>} style={{ height: 400 }} />);
