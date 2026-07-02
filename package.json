@@ -5,6 +5,19 @@
   "type": "module",
   "license": "MIT",
   "author": "Nariman Gardi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NarimanGardi/draggable-grid.git"
+  },
+  "homepage": "https://github.com/NarimanGardi/draggable-grid#readme",
+  "keywords": [
+    "react",
+    "grid",
+    "draggable",
+    "infinite-scroll",
+    "gallery",
+    "inertia"
+  ],
   "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
