@@ -294,6 +294,9 @@ export function mountWall(
       geo.dispose();
       for (const t of texes) t.dispose();
       renderer.dispose();
+      // Release the GL context outright — otherwise repeated mount/unmount cycles
+      // leak contexts and the browser eventually refuses new ones.
+      renderer.forceContextLoss();
     },
     recenter() {
       offset.x = 0;
