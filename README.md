@@ -7,22 +7,26 @@ plain static grid.
 
 ## Where this came from
 
-I built the original version as the poster wall for a project called Cinematch — a
-grid of film posters you could grab and throw around, wrapping forever. It started on
-WebGL: render the posters to a texture, then run a fullscreen shader to bow the whole
-thing toward the center.
+The original is the hero of a project called Cinematch: a wall of film posters on WebGL
+that you drag around, flinging with inertia and wrapping forever. The curve there is
+geometric, not a filter — flat poster planes sit in a perspective 3D scene, each nudged
+back along Z by its distance from center, so the wall bows into a shallow dome while
+every poster stays a crisp, undistorted rectangle. It falls back to a static CSS poster
+wall on mobile, reduced-motion, or where WebGL isn't available.
 
-Pulling it out into a reusable component, I dropped WebGL on purpose. A WebGL lens is a
-post-process on the canvas — it can't touch real DOM, so the moment you want the cells
-to be your own content (an `<img>` with a real `src`, a link, an arbitrary component),
-the effect and the content stop being the same thing. So the cells here are plain DOM,
-dragged and wrapped with CSS transforms, and the "lens" is a CSS scale/curve that bends
-the actual cards. You lose the optical distortion of a real shader; you gain content
-that's genuinely yours. That trade is the whole point of this package.
+This package is that effect rebuilt for plain DOM — a reimagining, not a port of the
+code; the two share the behavior, not the implementation (three.js there, DOM here). The
+reason to leave WebGL behind: in the original every "poster" is an image painted onto a
+GPU plane, so the content can't be your real markup — no live links, no arbitrary
+components, no selectable text, and accessibility has to be mirrored in a separate DOM
+layer. Here the cells are your own React nodes, dragged and wrapped with CSS transforms,
+and the concave feel is a CSS approximation (a scale/curve toward the center) rather than
+a true perspective camera. You trade the real 3D dome for content that's genuinely yours.
+That trade is the point.
 
 It leans on [`@use-gesture/react`](https://github.com/pmndrs/use-gesture) for pointer and
 touch handling. The "draggable wall" itself is a well-worn creative-web effect — this is
-just a small, configurable, honest version of it.
+a small, configurable, honest take on it.
 
 ## Install
 
@@ -119,9 +123,10 @@ static, bounded, scrollable grid — no dragging, no animation loop.
 
 ## Limitations / Not handled
 
-- **The lens is a CSS transform, not an optical distortion.** It scales and nudges cells
-  by distance from center; it won't refract or fisheye like a real shader. That's the
-  deliberate trade for keeping cells as real DOM (see above).
+- **The lens is a CSS transform, not real 3D.** It scales and nudges cells by distance
+  from center to fake the bow; it won't give you the true perspective dome the WebGL
+  original did (flat planes recessed in Z). That's the deliberate trade for keeping cells
+  as real DOM (see above).
 - **Content repeats.** Wrapping is periodic — when `items` don't fill the tile, the same
   items reappear as you drag past a span. There's no endless stream of unique content.
 - **No virtualization beyond the viewport.** Only cells covering the viewport (plus a
