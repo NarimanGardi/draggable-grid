@@ -11,7 +11,6 @@ const DEFAULTS = {
   gap: 0.06,
   cellAspect: 2 / 3,
   lens: { distortion: 0.6, vignette: 0.28 },
-  parallax: 1,
   drag: { inertia: 0.94, sensitivity: 1, axis: 'both' as const, enabled: true },
   drift: { enabled: true, speed: 0.004, angle: 160, delay: 1200 },
   dpr: [1, 2] as [number, number],
@@ -37,7 +36,6 @@ function DraggableGridInner(
   } = props;
 
   const lens = props.lens === false ? false : { ...DEFAULTS.lens, ...props.lens };
-  const parallax = props.parallax ?? DEFAULTS.parallax;
   const drag = { ...DEFAULTS.drag, ...props.drag };
   const drift =
     props.drift === false
@@ -70,7 +68,7 @@ function DraggableGridInner(
     n: items.length,
   });
   // Tunable signature: these are pushed to the running engine in place (no remount).
-  const dynKey = JSON.stringify({ lens, parallax, drag, drift });
+  const dynKey = JSON.stringify({ lens, drag, drift });
 
   useEffect(() => {
     if (useStatic) return;
@@ -89,7 +87,6 @@ function DraggableGridInner(
         cellAspect,
         gap,
         lens,
-        parallax,
         drag,
         drift,
         dpr,
@@ -114,9 +111,9 @@ function DraggableGridInner(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useStatic, structuralKey]);
 
-  // Push tunable changes (lens / drift / parallax / drag) to the running engine in place.
+  // Push tunable changes (lens / drift / drag) to the running engine in place.
   useEffect(() => {
-    controlsRef.current?.update({ lens, parallax, drag, drift });
+    controlsRef.current?.update({ lens, drag, drift });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dynKey]);
 

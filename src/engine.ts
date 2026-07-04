@@ -21,7 +21,7 @@ import { axisMask, stepInertia, type Axis, type Vec } from './motion';
 // homepage grid: a draggable, infinitely-wrapping wall of flat poster planes rendered to
 // a texture, then warped by a fullscreen barrel-distortion + vignette shader so the whole
 // wall bulges like a lens. Drag has velocity-ramped inertia, the camera dollies back while
-// dragging, the wall drifts on its own, and it parallaxes gently against the cursor.
+// dragging, and the wall drifts on its own once left alone.
 // Owns only the GPU scene + pointer handling; the canvas, static fallback, and accessible
 // DOM belong to the React component. Imported client-side so three stays out of SSR.
 
@@ -33,7 +33,6 @@ export interface EngineOptions {
   lens: { distortion: number; vignette: number } | false; // barrel warp + corner darken
   drag: { inertia: number; sensitivity: number; axis: Axis; enabled: boolean };
   drift: { enabled: boolean; speed: number; angle: number; delay: number };
-  parallax: number; // ambient cursor parallax (0 = off)
   dpr: [number, number];
   background: string;
   onReady: () => void;
@@ -97,7 +96,7 @@ export interface EngineControls {
   dispose(): void;
   recenter(): void;
   getOffset(): { x: number; y: number };
-  update(next: Partial<Pick<EngineOptions, 'lens' | 'drift' | 'parallax' | 'drag'>>): void;
+  update(next: Partial<Pick<EngineOptions, 'lens' | 'drift' | 'drag'>>): void;
 }
 
 export function mountWall(
@@ -222,12 +221,11 @@ export function mountWall(
   const postQuad = new Mesh(new PlaneGeometry(2, 2), postMat);
   postScene.add(postQuad);
 
-  // Live-tunable params — mutated by update() so lens/drift/drag/parallax changes take
+  // Live-tunable params — mutated by update() so lens/drift/drag changes take
   // effect without tearing down the scene (which would force a context loss on the canvas).
   const dyn = {
     lens: opts.lens,
     drift: { ...opts.drift },
-    parallax: opts.parallax,
     drag: { ...opts.drag },
   };
   const computeDrift = (d: EngineOptions['drift']): Vec => ({
@@ -239,7 +237,6 @@ export function mountWall(
   // Interaction.
   const offset: Vec = { x: 0, y: 0 };
   const vel: Vec = { x: 0, y: 0 };
-  const pointer = { x: 0, y: 0 }; // normalized -0.5..0.5 for ambient parallax
   let dragging = false;
   let lastDrag = -1e9; // timestamp of the last drag interaction (drift pauses around it)
   const last = { x: 0, y: 0 };
@@ -263,9 +260,6 @@ export function mountWall(
     canvas.setPointerCapture?.(e.pointerId);
   };
   const onMove = (e: PointerEvent) => {
-    const r = canvas.getBoundingClientRect();
-    pointer.x = (e.clientX - r.left) / r.width - 0.5;
-    pointer.y = (e.clientY - r.top) / r.height - 0.5;
     if (!dragging) return;
     lastDrag = performance.now();
     const wpp = worldPerPx();
@@ -318,7 +312,6 @@ export function mountWall(
   window.addEventListener('resize', resize);
 
   let frame = 0;
-  const ambient = { x: 0, y: 0 };
   const tick = () => {
     frame = requestAnimationFrame(tick);
     if (!opts.visibleRef.current) return;
@@ -337,15 +330,9 @@ export function mountWall(
         offset.y += driftVec.y;
       }
     }
-    // Ambient cursor parallax: the wall eases opposite the pointer.
-    const px = worldPerPx();
-    const targetAmbX = -pointer.x * dyn.parallax * W * px * 0.5;
-    const targetAmbY = pointer.y * dyn.parallax * H * px * 0.5;
-    ambient.x += (targetAmbX - ambient.x) * 0.06;
-    ambient.y += (targetAmbY - ambient.y) * 0.06;
     for (const m of cards) {
-      m.position.x = wrap((m.userData.baseX as number) + offset.x + ambient.x, SPAN_X);
-      m.position.y = wrap((m.userData.baseY as number) + offset.y + ambient.y, SPAN_Y);
+      m.position.x = wrap((m.userData.baseX as number) + offset.x, SPAN_X);
+      m.position.y = wrap((m.userData.baseY as number) + offset.y, SPAN_Y);
     }
     if (rt && dyn.lens !== false) {
       renderer.setRenderTarget(rt);
@@ -387,7 +374,6 @@ export function mountWall(
     },
     update(next) {
       if (next.drag) dyn.drag = { ...dyn.drag, ...next.drag };
-      if (next.parallax !== undefined) dyn.parallax = next.parallax;
       if (next.drift) {
         dyn.drift = { ...dyn.drift, ...next.drift };
         driftVec = computeDrift(dyn.drift);

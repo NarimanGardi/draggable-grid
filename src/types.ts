@@ -38,7 +38,6 @@ export interface DraggableGridProps {
   gap?: number; // gap between posters as a fraction of poster width
   cellAspect?: number; // poster width / height
   lens?: Partial<LensConfig> | false; // fullscreen barrel + vignette; false = flat render
-  parallax?: number; // ambient cursor parallax (0 = off)
   drag?: Partial<DragConfig>;
   drift?: Partial<DriftConfig> | false;
   dpr?: [number, number]; // device-pixel-ratio clamp
