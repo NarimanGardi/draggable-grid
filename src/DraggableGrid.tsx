@@ -8,12 +8,12 @@ import type { DraggableGridProps, DraggableGridHandle, ImageItem } from './types
 
 const DEFAULTS = {
   columns: 7,
-  gap: 0.12,
+  gap: 0.06,
   cellAspect: 2 / 3,
-  lens: { distortion: 1.6, vignette: 0.5 },
+  lens: { distortion: 0.6, vignette: 0.28 },
   parallax: 1,
   drag: { inertia: 0.94, sensitivity: 1, axis: 'both' as const, enabled: true },
-  drift: { enabled: true, speed: 0.004, angle: 160 },
+  drift: { enabled: true, speed: 0.004, angle: 160, delay: 1200 },
   dpr: [1, 2] as [number, number],
   background: 'transparent',
 };
@@ -41,7 +41,7 @@ function DraggableGridInner(
   const drag = { ...DEFAULTS.drag, ...props.drag };
   const drift =
     props.drift === false
-      ? { enabled: false, speed: 0, angle: 0 }
+      ? { enabled: false, speed: 0, angle: 0, delay: 0 }
       : { ...DEFAULTS.drift, ...props.drift };
   const dpr = props.dpr ?? DEFAULTS.dpr;
 

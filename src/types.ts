@@ -13,11 +13,12 @@ export interface DragConfig {
   enabled: boolean;
 }
 
-// Continuous ambient motion — the wall drifts whenever you're not dragging.
+// Ambient motion — the wall drifts once it's been left alone.
 export interface DriftConfig {
   enabled: boolean;
   speed: number; // world units per frame
   angle: number; // direction in degrees
+  delay: number; // ms of no dragging before drift resumes (so it doesn't fight a drag)
 }
 
 // The fullscreen lens: a barrel warp that bulges the whole wall, plus a corner vignette.

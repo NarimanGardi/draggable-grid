@@ -25,8 +25,8 @@ export function App() {
         ref={ref}
         items={posters}
         columns={6}
-        lens={lens ? { distortion: 1.6, vignette: 0.5 } : false}
-        drift={drift ? { enabled: true, speed: 0.004, angle: 160 } : false}
+        lens={lens ? { distortion: 0.6, vignette: 0.28 } : false}
+        drift={drift ? { enabled: true, speed: 0.004, angle: 160, delay: 1200 } : false}
         onSelect={(item, i) => console.log('select', i, item)}
         style={{ width: '100%', height: '100%' }}
       />

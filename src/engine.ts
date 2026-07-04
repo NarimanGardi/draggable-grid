@@ -32,7 +32,7 @@ export interface EngineOptions {
   gap: number; // gap as a fraction of poster width
   lens: { distortion: number; vignette: number } | false; // barrel warp + corner darken
   drag: { inertia: number; sensitivity: number; axis: Axis; enabled: boolean };
-  drift: { enabled: boolean; speed: number; angle: number };
+  drift: { enabled: boolean; speed: number; angle: number; delay: number };
   parallax: number; // ambient cursor parallax (0 = off)
   dpr: [number, number];
   background: string;
@@ -241,6 +241,7 @@ export function mountWall(
   const vel: Vec = { x: 0, y: 0 };
   const pointer = { x: 0, y: 0 }; // normalized -0.5..0.5 for ambient parallax
   let dragging = false;
+  let lastDrag = -1e9; // timestamp of the last drag interaction (drift pauses around it)
   const last = { x: 0, y: 0 };
   let travel = 0;
   const worldPerPx = () => (2 * camera.position.z * tanHalf) / H;
@@ -253,6 +254,7 @@ export function mountWall(
   const onDown = (e: PointerEvent) => {
     if (!dyn.drag.enabled) return;
     dragging = true;
+    lastDrag = performance.now();
     travel = 0;
     vel.x = vel.y = 0;
     last.x = e.clientX;
@@ -265,6 +267,7 @@ export function mountWall(
     pointer.x = (e.clientX - r.left) / r.width - 0.5;
     pointer.y = (e.clientY - r.top) / r.height - 0.5;
     if (!dragging) return;
+    lastDrag = performance.now();
     const wpp = worldPerPx();
     const dxPx = e.clientX - last.x;
     const dyPx = e.clientY - last.y;
@@ -287,6 +290,7 @@ export function mountWall(
       const hit = raycaster.intersectObjects(cards, false)[0];
       if (hit) opts.onSelect(hit.object.userData.itemIndex as number);
     }
+    if (dragging) lastDrag = performance.now();
     dragging = false;
     camZTarget = CAM_Z;
   };
@@ -318,6 +322,7 @@ export function mountWall(
   const tick = () => {
     frame = requestAnimationFrame(tick);
     if (!opts.visibleRef.current) return;
+    const now = performance.now();
     camera.position.z += (camZTarget - camera.position.z) * 0.08;
     if (!dragging) {
       const r = stepInertia(vel, dyn.drag.inertia, 0.0002);
@@ -325,7 +330,9 @@ export function mountWall(
       vel.y = r.v.y;
       offset.x += vel.x;
       offset.y += vel.y;
-      if (dyn.drift.enabled) {
+      // Ambient drift, but only once the wall has been left alone — so it never fights an
+      // active drag or slides away the instant you release.
+      if (dyn.drift.enabled && now - lastDrag > dyn.drift.delay) {
         offset.x += driftVec.x;
         offset.y += driftVec.y;
       }
