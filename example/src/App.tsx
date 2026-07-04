@@ -13,14 +13,14 @@ export function App() {
 
   return (
     <div
-      style={{ fontFamily: 'system-ui', color: '#eee', background: '#0b0b0d', minHeight: '100vh' }}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: '#0b0b0d',
+        fontFamily: 'system-ui',
+        color: '#eee',
+      }}
     >
-      <header style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center' }}>
-        <strong>draggable-grid</strong>
-        <button onClick={() => setLens((v) => !v)}>lens: {lens ? 'on' : 'off'}</button>
-        <button onClick={() => setDrift((v) => !v)}>drift: {drift ? 'on' : 'off'}</button>
-        <button onClick={() => ref.current?.recenter()}>recenter</button>
-      </header>
       <DraggableGrid
         ref={ref}
         items={posters}
@@ -28,8 +28,23 @@ export function App() {
         lens={lens ? { distortion: 1.6, vignette: 0.5 } : false}
         drift={drift ? { enabled: true, speed: 0.004, angle: 160 } : false}
         onSelect={(item, i) => console.log('select', i, item)}
-        style={{ height: '80vh' }}
+        style={{ width: '100%', height: '100%' }}
       />
+      <header
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: 16,
+          display: 'flex',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
+        <strong style={{ marginRight: 4 }}>draggable-grid</strong>
+        <button onClick={() => setLens((v) => !v)}>lens: {lens ? 'on' : 'off'}</button>
+        <button onClick={() => setDrift((v) => !v)}>drift: {drift ? 'on' : 'off'}</button>
+        <button onClick={() => ref.current?.recenter()}>recenter</button>
+      </header>
     </div>
   );
 }

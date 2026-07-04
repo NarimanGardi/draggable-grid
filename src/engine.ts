@@ -54,9 +54,10 @@ const POST_VERT = `
   void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
 `;
 
-// Barrel distortion + vignette, sampling the rendered grid. shiftedUv is the fragment's
-// position relative to center; scaling it by (0.88 + distortion*dot) bulges the image
-// toward the edges (a lens). Corners that fall outside the source read as background.
+// Pincushion "hole" distortion + vignette, sampling the rendered grid. shiftedUv is the
+// fragment's position relative to center; the center is pushed to sample from further out
+// (recedes) while the edges magnify, so the wall sinks inward like looking into a funnel.
+// Corners that fall outside the source read as background.
 const POST_FRAG = `
   precision highp float;
   uniform sampler2D tDiffuse;
@@ -67,7 +68,8 @@ const POST_FRAG = `
   varying vec2 vUv;
   void main() {
     vec2 s = vUv - 0.5;
-    s *= (0.88 + distortion * dot(s, s));
+    float f = max(0.2, 1.0 + distortion * (0.15 - dot(s, s)));
+    s *= f;
     vec2 uv = s + 0.5;
     if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
       gl_FragColor = vec4(bg, bgAlpha);
@@ -95,6 +97,7 @@ export interface EngineControls {
   dispose(): void;
   recenter(): void;
   getOffset(): { x: number; y: number };
+  update(next: Partial<Pick<EngineOptions, 'lens' | 'drift' | 'parallax' | 'drag'>>): void;
 }
 
 export function mountWall(
@@ -219,13 +222,23 @@ export function mountWall(
   const postQuad = new Mesh(new PlaneGeometry(2, 2), postMat);
   postScene.add(postQuad);
 
+  // Live-tunable params — mutated by update() so lens/drift/drag/parallax changes take
+  // effect without tearing down the scene (which would force a context loss on the canvas).
+  const dyn = {
+    lens: opts.lens,
+    drift: { ...opts.drift },
+    parallax: opts.parallax,
+    drag: { ...opts.drag },
+  };
+  const computeDrift = (d: EngineOptions['drift']): Vec => ({
+    x: d.speed * Math.cos(d.angle * DEG2RAD),
+    y: d.speed * Math.sin(d.angle * DEG2RAD),
+  });
+  let driftVec = computeDrift(dyn.drift);
+
   // Interaction.
   const offset: Vec = { x: 0, y: 0 };
   const vel: Vec = { x: 0, y: 0 };
-  const driftVec: Vec = {
-    x: opts.drift.speed * Math.cos(opts.drift.angle * DEG2RAD),
-    y: opts.drift.speed * Math.sin(opts.drift.angle * DEG2RAD),
-  };
   const pointer = { x: 0, y: 0 }; // normalized -0.5..0.5 for ambient parallax
   let dragging = false;
   const last = { x: 0, y: 0 };
@@ -238,7 +251,7 @@ export function mountWall(
   };
 
   const onDown = (e: PointerEvent) => {
-    if (!opts.drag.enabled) return;
+    if (!dyn.drag.enabled) return;
     dragging = true;
     travel = 0;
     vel.x = vel.y = 0;
@@ -256,11 +269,11 @@ export function mountWall(
     const dxPx = e.clientX - last.x;
     const dyPx = e.clientY - last.y;
     travel += Math.abs(dxPx) + Math.abs(dyPx);
-    const step = axisMask({ x: dxPx * wpp, y: -dyPx * wpp }, opts.drag.axis);
-    offset.x += step.x * opts.drag.sensitivity;
-    offset.y += step.y * opts.drag.sensitivity;
-    vel.x = step.x * opts.drag.sensitivity;
-    vel.y = step.y * opts.drag.sensitivity;
+    const step = axisMask({ x: dxPx * wpp, y: -dyPx * wpp }, dyn.drag.axis);
+    offset.x += step.x * dyn.drag.sensitivity;
+    offset.y += step.y * dyn.drag.sensitivity;
+    vel.x = step.x * dyn.drag.sensitivity;
+    vel.y = step.y * dyn.drag.sensitivity;
     last.x = e.clientX;
     last.y = e.clientY;
   };
@@ -307,27 +320,27 @@ export function mountWall(
     if (!opts.visibleRef.current) return;
     camera.position.z += (camZTarget - camera.position.z) * 0.08;
     if (!dragging) {
-      const r = stepInertia(vel, opts.drag.inertia, 0.0002);
+      const r = stepInertia(vel, dyn.drag.inertia, 0.0002);
       vel.x = r.v.x;
       vel.y = r.v.y;
       offset.x += vel.x;
       offset.y += vel.y;
-      if (opts.drift.enabled) {
+      if (dyn.drift.enabled) {
         offset.x += driftVec.x;
         offset.y += driftVec.y;
       }
     }
     // Ambient cursor parallax: the wall eases opposite the pointer.
     const px = worldPerPx();
-    const targetAmbX = -pointer.x * opts.parallax * W * px * 0.5;
-    const targetAmbY = pointer.y * opts.parallax * H * px * 0.5;
+    const targetAmbX = -pointer.x * dyn.parallax * W * px * 0.5;
+    const targetAmbY = pointer.y * dyn.parallax * H * px * 0.5;
     ambient.x += (targetAmbX - ambient.x) * 0.06;
     ambient.y += (targetAmbY - ambient.y) * 0.06;
     for (const m of cards) {
       m.position.x = wrap((m.userData.baseX as number) + offset.x + ambient.x, SPAN_X);
       m.position.y = wrap((m.userData.baseY as number) + offset.y + ambient.y, SPAN_Y);
     }
-    if (rt) {
+    if (rt && dyn.lens !== false) {
       renderer.setRenderTarget(rt);
       renderer.render(scene, camera);
       renderer.setRenderTarget(null);
@@ -364,6 +377,26 @@ export function mountWall(
     },
     getOffset() {
       return { x: offset.x, y: offset.y };
+    },
+    update(next) {
+      if (next.drag) dyn.drag = { ...dyn.drag, ...next.drag };
+      if (next.parallax !== undefined) dyn.parallax = next.parallax;
+      if (next.drift) {
+        dyn.drift = { ...dyn.drift, ...next.drift };
+        driftVec = computeDrift(dyn.drift);
+      }
+      if (next.lens !== undefined) {
+        dyn.lens = next.lens;
+        if (next.lens !== false) {
+          if (!rt) {
+            const s = rtSize();
+            rt = new WebGLRenderTarget(s.x, s.y);
+            postMat.uniforms.tDiffuse!.value = rt.texture;
+          }
+          postMat.uniforms.distortion!.value = next.lens.distortion;
+          postMat.uniforms.vignette!.value = next.lens.vignette;
+        }
+      }
     },
   };
 }

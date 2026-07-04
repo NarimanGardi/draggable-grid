@@ -60,19 +60,17 @@ function DraggableGridInner(
   const live = useRef({ items, onSelect, onReady: props.onReady });
   live.current = { items, onSelect, onReady: props.onReady };
 
-  // A config signature: when any of these change, tear the scene down and rebuild.
-  const optsKey = JSON.stringify({
+  // Structural signature: only these require tearing the scene down and rebuilding.
+  const structuralKey = JSON.stringify({
     columns,
     gap,
     cellAspect,
-    lens,
-    parallax,
-    drag,
-    drift,
     dpr,
     background,
     n: items.length,
   });
+  // Tunable signature: these are pushed to the running engine in place (no remount).
+  const dynKey = JSON.stringify({ lens, parallax, drag, drift });
 
   useEffect(() => {
     if (useStatic) return;
@@ -114,7 +112,13 @@ function DraggableGridInner(
       controlsRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useStatic, optsKey]);
+  }, [useStatic, structuralKey]);
+
+  // Push tunable changes (lens / drift / parallax / drag) to the running engine in place.
+  useEffect(() => {
+    controlsRef.current?.update({ lens, parallax, drag, drift });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dynKey]);
 
   // Pause rendering when off-screen.
   useEffect(() => {
