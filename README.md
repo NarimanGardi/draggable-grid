@@ -6,7 +6,9 @@ warps through a fullscreen lens — a concave "hole" that sinks inward toward th
 corners falling into a vignette. No WebGL (or reduced-motion) falls back to a plain
 static grid.
 
-<video src="https://raw.githubusercontent.com/NarimanGardi/draggable-grid/main/docs/demo.mp4" poster="https://raw.githubusercontent.com/NarimanGardi/draggable-grid/main/docs/hero.jpg" autoplay loop muted playsinline width="100%"></video>
+![draggable-grid — a draggable WebGL wall of images warped by a concave lens](https://raw.githubusercontent.com/NarimanGardi/draggable-grid/main/docs/demo.gif)
+
+<sub>▶ [Watch it smooth (mp4)](https://raw.githubusercontent.com/NarimanGardi/draggable-grid/main/docs/demo.mp4)</sub>
 
 ## Where this came from
 
