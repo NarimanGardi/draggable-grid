@@ -12,7 +12,7 @@ const DEFAULTS = {
   cellAspect: 2 / 3,
   lens: { distortion: 0.6, vignette: 0.28 },
   drag: { inertia: 0.94, sensitivity: 1, axis: 'both' as const, enabled: true },
-  drift: { enabled: true, speed: 0.004, angle: 160, delay: 1200 },
+  drift: { enabled: true, speed: 0.004, angle: 160, delay: 250 },
   dpr: [1, 2] as [number, number],
   background: 'transparent',
 };

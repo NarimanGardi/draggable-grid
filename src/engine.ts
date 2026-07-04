@@ -237,6 +237,7 @@ export function mountWall(
   // Interaction.
   const offset: Vec = { x: 0, y: 0 };
   const vel: Vec = { x: 0, y: 0 };
+  const curDrift: Vec = { x: 0, y: 0 }; // eased toward driftVec so drift fades in, not snaps
   let dragging = false;
   let lastDrag = -1e9; // timestamp of the last drag interaction (drift pauses around it)
   const last = { x: 0, y: 0 };
@@ -323,12 +324,14 @@ export function mountWall(
       vel.y = r.v.y;
       offset.x += vel.x;
       offset.y += vel.y;
-      // Ambient drift, but only once the wall has been left alone — so it never fights an
-      // active drag or slides away the instant you release.
-      if (dyn.drift.enabled && now - lastDrag > dyn.drift.delay) {
-        offset.x += driftVec.x;
-        offset.y += driftVec.y;
-      }
+      // Drift eases in once the wall has been left alone (past the delay) rather than
+      // snapping on — so it glides out of the drag's momentum instead of stopping then
+      // jerking into motion, and it never fights an active drag.
+      const drifting = dyn.drift.enabled && now - lastDrag > dyn.drift.delay;
+      curDrift.x += ((drifting ? driftVec.x : 0) - curDrift.x) * 0.04;
+      curDrift.y += ((drifting ? driftVec.y : 0) - curDrift.y) * 0.04;
+      offset.x += curDrift.x;
+      offset.y += curDrift.y;
     }
     for (const m of cards) {
       m.position.x = wrap((m.userData.baseX as number) + offset.x, SPAN_X);
