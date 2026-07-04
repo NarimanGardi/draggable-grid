@@ -2,75 +2,93 @@ import {
   Group,
   Mesh,
   MeshBasicMaterial,
+  OrthographicCamera,
   PerspectiveCamera,
   PlaneGeometry,
   Raycaster,
   Scene,
+  ShaderMaterial,
   SRGBColorSpace,
   TextureLoader,
   Vector2,
   WebGLRenderer,
+  WebGLRenderTarget,
   type Texture,
 } from 'three';
 import { axisMask, stepInertia, type Axis, type Vec } from './motion';
 
-// The vanilla-three engine for the draggable poster wall. Generalized from the
-// Cinematch theatre hero: a draggable, infinitely-wrapping wall of poster planes on a
-// concave dome (perspective camera + per-plane Z recession), with each poster itself
-// curved on a cylinder so it cups toward the viewer. Owns only the GPU scene and the
-// pointer handling; the canvas element, the static fallback, and the accessible DOM are
-// the React component's. Kept out of any server bundle by being imported client-side.
+// The vanilla-three engine for the draggable poster wall, modelled on phantom.land's
+// homepage grid: a draggable, infinitely-wrapping wall of flat poster planes rendered to
+// a texture, then warped by a fullscreen barrel-distortion + vignette shader so the whole
+// wall bulges like a lens. Drag has velocity-ramped inertia, the camera dollies back while
+// dragging, the wall drifts on its own, and it parallaxes gently against the cursor.
+// Owns only the GPU scene + pointer handling; the canvas, static fallback, and accessible
+// DOM belong to the React component. Imported client-side so three stays out of SSR.
 
 export interface EngineOptions {
-  posters: string[]; // ordered image URLs, cycled across the wall
+  posters: string[];
   columns: number;
-  cellAspect: number; // width / height
-  gap: number; // world-unit gap as a fraction of card width
-  dome: number; // wall concavity: z = dome * (x² + y²), clamped
-  bend: number; // per-poster curve: edge Z displacement (world units), 0 = flat
+  cellAspect: number;
+  gap: number; // gap as a fraction of poster width
+  lens: { distortion: number; vignette: number } | false; // barrel warp + corner darken
   drag: { inertia: number; sensitivity: number; axis: Axis; enabled: boolean };
-  drift: { enabled: boolean; speed: number; angle: number }; // continuous ambient motion
+  drift: { enabled: boolean; speed: number; angle: number };
+  parallax: number; // ambient cursor parallax (0 = off)
   dpr: [number, number];
-  background: string; // CSS color
+  background: string;
   onReady: () => void;
   onSelect?: (index: number) => void;
-  visibleRef: { current: boolean }; // gates rendering when off-screen
+  visibleRef: { current: boolean };
 }
 
 const FOV = 38;
 const CAM_Z = 26;
-const ZOOM_OUT = 1.18; // camera dollies back while dragging
-const MAX_RECESS = 5; // clamp the dome so edges don't rush the lens
+const ZOOM_OUT = 1.16; // camera dollies back while dragging
 const DEG2RAD = Math.PI / 180;
 const CARD_W = 3.0;
-const MARGIN = 4; // extra cells beyond the visible field on every side
-const TAP_PX = 6; // pointer travel under this on release counts as a tap, not a drag
+const MARGIN = 4;
+const TAP_PX = 6;
 
-// A poster plane curved on a vertical cylinder: each vertex is pushed toward the viewer
-// by the square of its horizontal distance from the poster's center, so the poster cups
-// around the viewer. `bend` is the edge displacement in world units (0 = flat plane).
-function curvedPoster(w: number, h: number, bend: number): PlaneGeometry {
-  const geo = new PlaneGeometry(w, h, bend > 0 ? 24 : 1, 1);
-  const pos = geo.attributes.position;
-  if (bend > 0 && pos) {
-    const halfW = w / 2;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      pos.setZ(i, bend * (x / halfW) * (x / halfW));
+const POST_VERT = `
+  varying vec2 vUv;
+  void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }
+`;
+
+// Barrel distortion + vignette, sampling the rendered grid. shiftedUv is the fragment's
+// position relative to center; scaling it by (0.88 + distortion*dot) bulges the image
+// toward the edges (a lens). Corners that fall outside the source read as background.
+const POST_FRAG = `
+  precision highp float;
+  uniform sampler2D tDiffuse;
+  uniform float distortion;
+  uniform float vignette;
+  uniform vec3 bg;
+  uniform float bgAlpha;
+  varying vec2 vUv;
+  void main() {
+    vec2 s = vUv - 0.5;
+    s *= (0.88 + distortion * dot(s, s));
+    vec2 uv = s + 0.5;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+      gl_FragColor = vec4(bg, bgAlpha);
+      return;
     }
-    pos.needsUpdate = true;
-    geo.computeVertexNormals();
+    vec4 c = texture2D(tDiffuse, uv);
+    float vig = 1.0 - vignette * smoothstep(0.25, 0.72, length(s));
+    c.rgb *= vig;
+    gl_FragColor = c;
   }
-  return geo;
-}
+`;
 
-function parseColor(css: string): number | null {
-  if (css === 'transparent') return null;
+function parseColor(css: string): { rgb: [number, number, number]; alpha: number } {
+  if (css === 'transparent') return { rgb: [0, 0, 0], alpha: 0 };
   const ctx = document.createElement('canvas').getContext('2d');
-  if (!ctx) return 0x0a0a0a;
+  if (!ctx) return { rgb: [0.04, 0.04, 0.04], alpha: 1 };
   ctx.fillStyle = css;
-  const hex = ctx.fillStyle; // normalized to #rrggbb
-  return hex.startsWith('#') ? parseInt(hex.slice(1), 16) : 0x0a0a0a;
+  const hex = ctx.fillStyle;
+  if (!hex.startsWith('#')) return { rgb: [0.04, 0.04, 0.04], alpha: 1 };
+  const n = parseInt(hex.slice(1), 16);
+  return { rgb: [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255], alpha: 1 };
 }
 
 export interface EngineControls {
@@ -79,39 +97,39 @@ export interface EngineControls {
   getOffset(): { x: number; y: number };
 }
 
-// Mounts the wall onto `canvas`. Returns controls (dispose + imperative handle), or
-// undefined if there is no usable WebGL context (the caller keeps the static fallback).
 export function mountWall(
   canvas: HTMLCanvasElement,
   opts: EngineOptions,
 ): EngineControls | undefined {
-  // Probe for a real (non-caveat) context before constructing the renderer, so three
-  // never logs a context-creation error on a machine that should fall back statically.
   const probe = document.createElement('canvas');
   const supported =
     probe.getContext('webgl2', { failIfMajorPerformanceCaveat: true }) ||
     probe.getContext('webgl', { failIfMajorPerformanceCaveat: true });
   if (!supported) return;
 
+  const n = opts.posters.length;
+  if (n === 0) return;
+
   let renderer: WebGLRenderer;
   try {
-    renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+    renderer = new WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance',
+    });
   } catch {
     return;
   }
 
-  const n = opts.posters.length;
-  if (n === 0) return;
-
   let W = canvas.clientWidth || 1280;
   let H = canvas.clientHeight || 760;
   let aspect = W / H;
-  const clampedDpr = Math.min(Math.max(window.devicePixelRatio, opts.dpr[0]), opts.dpr[1]);
-  renderer.setPixelRatio(clampedDpr);
+  const dprValue = Math.min(Math.max(window.devicePixelRatio, opts.dpr[0]), opts.dpr[1]);
+  renderer.setPixelRatio(dprValue);
   renderer.setSize(W, H, false);
   const bg = parseColor(opts.background);
-  if (bg === null) renderer.setClearAlpha(0);
-  else renderer.setClearColor(bg, 1);
+  renderer.setClearColor(0x000000, 0);
 
   const tanHalf = Math.tan((FOV * DEG2RAD) / 2);
   const camera = new PerspectiveCamera(FOV, aspect, 0.1, 200);
@@ -127,7 +145,7 @@ export function mountWall(
   const gapW = CARD_W * opts.gap;
   const cellW = cardW + gapW;
   const cellH = cardH + gapW;
-  const geo = curvedPoster(cardW, cardH, opts.bend);
+  const geo = new PlaneGeometry(cardW, cardH);
 
   const loader = new TextureLoader();
   loader.crossOrigin = 'anonymous';
@@ -150,7 +168,7 @@ export function mountWall(
   let SPAN_Y = 0;
   let texCursor = 0;
 
-  const coverHalfH = () => (CAM_Z * ZOOM_OUT + MAX_RECESS) * tanHalf;
+  const coverHalfH = () => CAM_Z * ZOOM_OUT * tanHalf;
   const neededCols = () => Math.ceil((2 * coverHalfH() * aspect) / cellW) + MARGIN;
   const neededRows = () => Math.ceil((2 * coverHalfH()) / cellH) + MARGIN;
 
@@ -163,7 +181,7 @@ export function mountWall(
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         const idx = texCursor % n;
-        const mat = new MeshBasicMaterial({ map: texes[idx], transparent: bg === null });
+        const mat = new MeshBasicMaterial({ map: texes[idx], transparent: true });
         const m = new Mesh(geo, mat);
         m.userData.baseX = (c - (cols - 1) / 2) * cellW + (r % 2 ? cellW * 0.5 : 0);
         m.userData.baseY = (r - (rows - 1) / 2) * cellH;
@@ -180,16 +198,38 @@ export function mountWall(
   };
   buildGrid(neededCols(), neededRows());
 
-  // Interaction: pointer drag → offset, inertia on release, continuous ambient drift.
+  // Post-processing: render the grid to a target, then warp it with the barrel shader.
+  const post = opts.lens;
+  const rtSize = () => new Vector2().copy(renderer.getDrawingBufferSize(new Vector2()));
+  let rt = post ? new WebGLRenderTarget(rtSize().x, rtSize().y) : null;
+  const postScene = new Scene();
+  const postCam = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  const postMat = new ShaderMaterial({
+    uniforms: {
+      tDiffuse: { value: rt ? rt.texture : null },
+      distortion: { value: post ? post.distortion : 0 },
+      vignette: { value: post ? post.vignette : 0 },
+      bg: { value: bg.rgb },
+      bgAlpha: { value: bg.alpha },
+    },
+    vertexShader: POST_VERT,
+    fragmentShader: POST_FRAG,
+    transparent: bg.alpha === 0,
+  });
+  const postQuad = new Mesh(new PlaneGeometry(2, 2), postMat);
+  postScene.add(postQuad);
+
+  // Interaction.
   const offset: Vec = { x: 0, y: 0 };
   const vel: Vec = { x: 0, y: 0 };
   const driftVec: Vec = {
     x: opts.drift.speed * Math.cos(opts.drift.angle * DEG2RAD),
     y: opts.drift.speed * Math.sin(opts.drift.angle * DEG2RAD),
   };
+  const pointer = { x: 0, y: 0 }; // normalized -0.5..0.5 for ambient parallax
   let dragging = false;
   const last = { x: 0, y: 0 };
-  let travel = 0; // px moved since pointerdown, to tell tap from drag
+  let travel = 0;
   const worldPerPx = () => (2 * camera.position.z * tanHalf) / H;
   const wrap = (v: number, span: number) => {
     v = (v + span * 0.5) % span;
@@ -208,6 +248,9 @@ export function mountWall(
     canvas.setPointerCapture?.(e.pointerId);
   };
   const onMove = (e: PointerEvent) => {
+    const r = canvas.getBoundingClientRect();
+    pointer.x = (e.clientX - r.left) / r.width - 0.5;
+    pointer.y = (e.clientY - r.top) / r.height - 0.5;
     if (!dragging) return;
     const wpp = worldPerPx();
     const dxPx = e.clientX - last.x;
@@ -247,6 +290,10 @@ export function mountWall(
     renderer.setSize(W, H, false);
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
+    if (rt) {
+      const s = rtSize();
+      rt.setSize(s.x, s.y);
+    }
     const nc = neededCols();
     const nr = neededRows();
     if (nc > COLS || nr > ROWS) buildGrid(Math.max(nc, COLS), Math.max(nr, ROWS));
@@ -254,6 +301,7 @@ export function mountWall(
   window.addEventListener('resize', resize);
 
   let frame = 0;
+  const ambient = { x: 0, y: 0 };
   const tick = () => {
     frame = requestAnimationFrame(tick);
     if (!opts.visibleRef.current) return;
@@ -269,15 +317,24 @@ export function mountWall(
         offset.y += driftVec.y;
       }
     }
-    const dome = opts.dome;
+    // Ambient cursor parallax: the wall eases opposite the pointer.
+    const px = worldPerPx();
+    const targetAmbX = -pointer.x * opts.parallax * W * px * 0.5;
+    const targetAmbY = pointer.y * opts.parallax * H * px * 0.5;
+    ambient.x += (targetAmbX - ambient.x) * 0.06;
+    ambient.y += (targetAmbY - ambient.y) * 0.06;
     for (const m of cards) {
-      const x = wrap((m.userData.baseX as number) + offset.x, SPAN_X);
-      const y = wrap((m.userData.baseY as number) + offset.y, SPAN_Y);
-      m.position.x = x;
-      m.position.y = y;
-      m.position.z = Math.min(dome * (x * x + y * y), MAX_RECESS);
+      m.position.x = wrap((m.userData.baseX as number) + offset.x + ambient.x, SPAN_X);
+      m.position.y = wrap((m.userData.baseY as number) + offset.y + ambient.y, SPAN_Y);
     }
-    renderer.render(scene, camera);
+    if (rt) {
+      renderer.setRenderTarget(rt);
+      renderer.render(scene, camera);
+      renderer.setRenderTarget(null);
+      renderer.render(postScene, postCam);
+    } else {
+      renderer.render(scene, camera);
+    }
   };
   tick();
 
@@ -293,9 +350,10 @@ export function mountWall(
       for (const m of cards) (m.material as MeshBasicMaterial).dispose();
       geo.dispose();
       for (const t of texes) t.dispose();
+      rt?.dispose();
+      postMat.dispose();
+      postQuad.geometry.dispose();
       renderer.dispose();
-      // Release the GL context outright — otherwise repeated mount/unmount cycles
-      // leak contexts and the browser eventually refuses new ones.
       renderer.forceContextLoss();
     },
     recenter() {

@@ -20,10 +20,10 @@ export interface DriftConfig {
   angle: number; // direction in degrees
 }
 
-// The concave "theatre" shape.
-export interface CurveConfig {
-  dome: number; // wall concavity: a poster's Z recesses by dome*(x²+y²), clamped
-  bend: number; // per-poster curve: edge Z displacement in world units (0 = flat posters)
+// The fullscreen lens: a barrel warp that bulges the whole wall, plus a corner vignette.
+export interface LensConfig {
+  distortion: number; // barrel strength — higher bulges more (0 ≈ flat)
+  vignette: number; // corner darkening, 0..1
 }
 
 export interface DraggableGridHandle {
@@ -36,7 +36,8 @@ export interface DraggableGridProps {
   columns?: number;
   gap?: number; // gap between posters as a fraction of poster width
   cellAspect?: number; // poster width / height
-  curve?: Partial<CurveConfig> | false; // false = flat wall, flat posters
+  lens?: Partial<LensConfig> | false; // fullscreen barrel + vignette; false = flat render
+  parallax?: number; // ambient cursor parallax (0 = off)
   drag?: Partial<DragConfig>;
   drift?: Partial<DriftConfig> | false;
   dpr?: [number, number]; // device-pixel-ratio clamp

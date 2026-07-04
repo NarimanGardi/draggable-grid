@@ -4,7 +4,7 @@ export type {
   DraggableGridHandle,
   DragConfig,
   DriftConfig,
-  CurveConfig,
+  LensConfig,
   ImageItem,
 } from './types';
 export type { Axis } from './motion';

@@ -8,10 +8,10 @@ import type { DraggableGridProps, DraggableGridHandle, ImageItem } from './types
 
 const DEFAULTS = {
   columns: 7,
-  gap: 0.18,
+  gap: 0.12,
   cellAspect: 2 / 3,
-  dome: 0.018,
-  bend: 0.6,
+  lens: { distortion: 1.6, vignette: 0.5 },
+  parallax: 1,
   drag: { inertia: 0.94, sensitivity: 1, axis: 'both' as const, enabled: true },
   drift: { enabled: true, speed: 0.004, angle: 160 },
   dpr: [1, 2] as [number, number],
@@ -36,10 +36,8 @@ function DraggableGridInner(
     style,
   } = props;
 
-  const curve =
-    props.curve === false
-      ? { dome: 0, bend: 0 }
-      : { dome: DEFAULTS.dome, bend: DEFAULTS.bend, ...props.curve };
+  const lens = props.lens === false ? false : { ...DEFAULTS.lens, ...props.lens };
+  const parallax = props.parallax ?? DEFAULTS.parallax;
   const drag = { ...DEFAULTS.drag, ...props.drag };
   const drift =
     props.drift === false
@@ -67,7 +65,8 @@ function DraggableGridInner(
     columns,
     gap,
     cellAspect,
-    curve,
+    lens,
+    parallax,
     drag,
     drift,
     dpr,
@@ -91,8 +90,8 @@ function DraggableGridInner(
         columns,
         cellAspect,
         gap,
-        dome: curve.dome,
-        bend: curve.bend,
+        lens,
+        parallax,
         drag,
         drift,
         dpr,

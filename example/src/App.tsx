@@ -8,7 +8,7 @@ const posters = Array.from({ length: 24 }, (_, i) => ({
 
 export function App() {
   const ref = useRef<DraggableGridHandle>(null);
-  const [curve, setCurve] = useState(true);
+  const [lens, setLens] = useState(true);
   const [drift, setDrift] = useState(true);
 
   return (
@@ -17,7 +17,7 @@ export function App() {
     >
       <header style={{ padding: '16px 20px', display: 'flex', gap: 12, alignItems: 'center' }}>
         <strong>draggable-grid</strong>
-        <button onClick={() => setCurve((v) => !v)}>curve: {curve ? 'on' : 'off'}</button>
+        <button onClick={() => setLens((v) => !v)}>lens: {lens ? 'on' : 'off'}</button>
         <button onClick={() => setDrift((v) => !v)}>drift: {drift ? 'on' : 'off'}</button>
         <button onClick={() => ref.current?.recenter()}>recenter</button>
       </header>
@@ -25,7 +25,7 @@ export function App() {
         ref={ref}
         items={posters}
         columns={6}
-        curve={curve ? { dome: 0.018, bend: 0.6 } : false}
+        lens={lens ? { distortion: 1.6, vignette: 0.5 } : false}
         drift={drift ? { enabled: true, speed: 0.004, angle: 160 } : false}
         onSelect={(item, i) => console.log('select', i, item)}
         style={{ height: '80vh' }}
