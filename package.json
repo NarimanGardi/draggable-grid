@@ -1,6 +1,6 @@
 {
   "name": "@narimangardi/draggable-grid",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Draggable, infinitely-wrapping WebGL wall of curved poster planes on a concave dome — inertia, ambient drift, and a static-grid fallback.",
   "type": "module",
   "license": "MIT",
